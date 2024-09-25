@@ -95,7 +95,7 @@ class _OrderState extends State<Order> {
 
       // Thay thế URL API của bạn vào đây
       final response = await http.post(
-        Uri.parse('http://10.0.2.2:8080/api/bookings/update-status'),
+        Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/update-status'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'bookingStatus': status,
@@ -160,7 +160,7 @@ class _OrderState extends State<Order> {
   }
 
   Future<void> getDriverById(int driverId) async {
-    final String apiUrl = 'http://10.0.2.2:8080/api/drivers/$driverId'; // Đặt URL API chính xác
+    final String apiUrl = 'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/$driverId'; // Đặt URL API chính xác
     print('check tai xe ');
     try {
       final response = await http.get(Uri.parse(apiUrl));
@@ -189,7 +189,7 @@ class _OrderState extends State<Order> {
   Future<void> _checkUnfinishedBooking(int driverId) async {
     try {
       final response = await http.get(
-        Uri.parse('http://10.0.2.2:8080/api/bookings/unfinished/$driverId'),
+        Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/unfinished/$driverId'),
       );
 
       if (response.statusCode == 200 && response.body.isNotEmpty) {
@@ -232,7 +232,7 @@ class _OrderState extends State<Order> {
 
     if (driverId != null && !hasAcknowledgedOrder) {  // Chỉ kiểm tra đơn hàng mới nếu chưa xác nhận
       final response = await http.get(
-        Uri.parse('http://10.0.2.2:8080/api/drivers/check-driver/$driverId'),
+        Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/check-driver/$driverId'),
       );
 
       if (response.statusCode == 200 && response.body.isNotEmpty) {
@@ -279,7 +279,7 @@ class _OrderState extends State<Order> {
     if (_currentLocation != null) {
       final response = await http.post(
         Uri.parse(
-            'http://10.0.2.2:8080/api/patientlocation/update-location'),
+            'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/patientlocation/update-location'),
         headers: {
           'Content-Type': 'application/json',
         },
