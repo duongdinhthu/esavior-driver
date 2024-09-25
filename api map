@@ -1,0 +1,165 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
+class Order extends StatefulWidget {
+  final bool isLoggedIn;
+  final Function onLogout;
+  final int? driverId; // Thay patientId bằng driverId
+
+  Order({required this.isLoggedIn, required this.onLogout, this.driverId});
+
+  @override
+  _OrderState createState() => _OrderState();
+}
+
+class _OrderState extends State<Order> {
+  // Vị trí giả định
+  final LatLng _startLocation = LatLng(21.0285, 105.8542); // Điểm bắt đầu (Hà Nội, Việt Nam)
+  final LatLng _endLocation = LatLng(21.0287, 105.8572); // Điểm kết thúc (Hà Nội, Việt Nam)
+
+  List<LatLng> polylinePoints = [];
+
+  @override
+  void initState() {
+    super.initState();
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ));
+
+    _getPolyline();
+  }
+
+  // Hàm lấy polyline từ Google Maps Directions API
+  Future<void> _getPolyline() async {
+    // Sử dụng Google Maps Directions API để lấy tuyến đường thực tế
+    const String apiKey = 'AIzaSyAAmSIrSdA8A2ovKuss11u2SQkZnW6-Kxk'; // Thay bằng API key của bạn
+    final String url =
+        'https://maps.googleapis.com/maps/api/directions/json?origin=${_startLocation.latitude},${_startLocation.longitude}&destination=${_endLocation.latitude},${_endLocation.longitude}&key=$apiKey';
+
+    try {
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'OK') {
+          final List<dynamic> steps = data['routes'][0]['legs'][0]['steps'];
+          List<LatLng> points = [];
+
+          // Lặp qua các bước và thêm các điểm vào tuyến đường
+          for (var step in steps) {
+            final startLocation = step['start_location'];
+            final endLocation = step['end_location'];
+            points.add(LatLng(startLocation['lat'], startLocation['lng']));
+            points.add(LatLng(endLocation['lat'], endLocation['lng']));
+          }
+
+          setState(() {
+            polylinePoints = points;
+          });
+        } else {
+          print('Error fetching route: ${data['status']}');
+          // Hiển thị lỗi nếu có
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error fetching route: ${data['status']}')),
+          );
+        }
+      } else {
+        print('Failed to fetch route with status: ${response.statusCode}');
+        // Hiển thị lỗi nếu không thể truy cập API
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to fetch route. Status code: ${response.statusCode}')),
+        );
+      }
+    } catch (e) {
+      print('Exception occurred: $e');
+      // Hiển thị lỗi nếu gặp exception
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Exception occurred: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Lấy chiều cao của màn hình
+    final double screenHeight = MediaQuery.of(context).size.height;
+
+    return Scaffold(
+      body: Column(
+        children: <Widget>[
+          // Bản đồ với chiều cao 8 phần 10 của màn hình
+          SizedBox(
+            height: screenHeight * 0.8, // 8 phần 10 của màn hình
+            child: FlutterMap(
+              options: MapOptions(
+                center: _startLocation,
+                zoom: 15.0,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  subdomains: ['a', 'b', 'c'],
+                ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      width: 80.0,
+                      height: 80.0,
+                      point: _startLocation,
+                      builder: (ctx) => Icon(
+                        Icons.location_pin,
+                        color: Colors.red,
+                        size: 40.0,
+                      ),
+                    ),
+                    Marker(
+                      width: 80.0,
+                      height: 80.0,
+                      point: _endLocation,
+                      builder: (ctx) => Icon(
+                        Icons.location_pin,
+                        color: Colors.blue,
+                        size: 40.0,
+                      ),
+                    ),
+                  ],
+                ),
+                // Vẽ tuyến đường polyline
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: polylinePoints,
+                      strokeWidth: 4.0,
+                      color: Colors.blue,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          // Các thành phần khác trong màn hình Order
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                // Thêm các widget khác cho màn hình Order ở đây
+                ElevatedButton(
+                  onPressed: () {
+                    // Logic đặt xe cứu thương
+                    print('Order button pressed');
+                  },
+                  child: Text('Order Ambulance'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

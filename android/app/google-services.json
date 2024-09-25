@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "233326359871",
+    "project_id": "realtime-67b18",
+    "storage_bucket": "realtime-67b18.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:233326359871:android:692026d15d618a848d8f8a",
+        "android_client_info": {
+          "package_name": "com.example.esavior_driver_project"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCsX3wLjHDvt7cWSaWbMCWgBQTEg4lgPVQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:233326359871:android:b04f318a714a83268d8f8a",
+        "android_client_info": {
+          "package_name": "com.example.project_flutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCsX3wLjHDvt7cWSaWbMCWgBQTEg4lgPVQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

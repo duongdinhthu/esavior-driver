@@ -1,0 +1,62 @@
+name: project_flutter
+description: "A new Flutter project."
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0" # Cập nhật SDK cho phù hợp với Dart 3.5.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^0.13.5  # Thêm lại gói http
+  intl: ^0.18.0
+  video_player: ^2.9.1
+  image_picker: ^0.8.4+2
+  google_maps_flutter: ^2.2.1  # Gói google maps nếu bạn vẫn sử dụng
+  cupertino_icons: ^1.0.8
+  url_launcher: ^6.0.20
+  geocoding: ^2.0.0 # Dùng để chuyển đổi địa chỉ thành tọa độ
+  geolocator: ^9.0.0
+  firebase_core: any
+  firebase_auth: any
+  cloud_firestore: any
+  firebase_database: any
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.10.0
+  flutter_map: any
+  latlong2: any
+flutter:
+  uses-material-design: true
+
+  # Thêm assets vào đây
+  assets:
+    - assets/images/  # Đường dẫn tới thư mục chứa ảnh
+#    - images/icons/heart-with-pulse.png
+#      - images/icons/empathy--v1.png
+#      - images/icons/accessibility2.png
+#      - images/icons/medical-doctor.png
+#      - images/icons/trust--v1.png
+#      - images/icons/heart-health.png
+#      - images/icons/facebook--v1.png
+#      - images/icons/zalo.png
+#      - images/icons/facebook-messenger.png
+#    - assets/images/library/img-library1.png
+#    - assets/images/library/img-library2.png
+#    - assets/images/library/img-library3.png
+#    - assets/images/library/img-library4.png
+#    - assets/images/library/img-detail1-1.png
+#    - assets/images/library/img-detail1-2.png
+#    - assets/images/library/img-detail2-1.png
+#    - assets/images/library/img-detail2-2.png
+#    - assets/images/library/img-detail2-3.png
+#    - assets/images/library/img-detail3-1.png
+#    - assets/images/library/img-detail3-2.png
+#    - assets/images/library/img-detail3-3.png
+#    - assets/images/library/img-detail4-1.png
+#    - assets/images/library/img-detail4-2.png
