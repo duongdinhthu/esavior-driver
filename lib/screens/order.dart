@@ -8,6 +8,7 @@ import 'package:geocoding/geocoding.dart';
 import 'package:http/http.dart' as http; // Import HTTP library
 import 'dart:convert'; // Import for JSON handling
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 
 class Order extends StatefulWidget {
@@ -38,6 +39,8 @@ class _OrderState extends State<Order> {
   MapController _mapController = MapController();
   bool notification = false;
   int? bookingId2;
+  bool hasAcknowledgedOrder = false;  // Biến để theo dõi xem tài xế đã xác nhận đơn hàng chưa
+  Timer? _locationTimer;
 
   @override
   void initState() {
@@ -67,9 +70,21 @@ class _OrderState extends State<Order> {
   @override
   void dispose() {
     _positionStream?.cancel();
+    _locationTimer?.cancel();
     super.dispose();
   }
-
+    // In ra thông báo hoàn thành đơn hàng
+  void _startLocationUpdates() {
+    Timer.periodic(Duration(seconds: 5), (timer) {
+      _sendLocationUpdate();
+      // Send driver's location to server
+      if (widget.driverId != null && !hasAcknowledgedOrder) {  // Chỉ kiểm tra nếu tài xế chưa xác nhận đơn hàng
+        getDriverById(widget.driverId!);
+      } else {
+        print("Driver ID is null or order has been acknowledged");
+      }
+    });
+  }
   Future<void> _upDateBookingStatus(int? bookingId1) async {
     print('thuc hien goi aPi chuyen trang thai booking sang complete');
     try {
@@ -80,7 +95,7 @@ class _OrderState extends State<Order> {
 
       // Thay thế URL API của bạn vào đây
       final response = await http.post(
-        Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/update-status'),
+        Uri.parse('http://10.0.2.2:8080/api/bookings/update-status'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'bookingStatus': status,
@@ -90,6 +105,7 @@ class _OrderState extends State<Order> {
 
       if (response.statusCode == 200) {
         showTemporaryMessage(context, "Emergency booking complete!");
+        _clearBookingStatus();
       } else {
         showTemporaryMessage(context, "Error during submit, Please try again.");
         print('Error: ${response.statusCode}, ${response.body}');
@@ -108,9 +124,43 @@ class _OrderState extends State<Order> {
     // Hiển thị SnackBar trên màn hình
     ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
+  Future<void> _clearBookingStatus() async {
+    try {
+      // Gọi hàm để cập nhật trạng thái booking sang "Completed"
+      await _upDateBookingStatus(bookingId2);
+
+      // Xóa thông tin booking trong SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('isSuccessBooked'); // Xóa trạng thái đã đặt chỗ thành công
+      await prefs.remove('currentLat'); // Xóa thông tin vị trí hiện tại
+      await prefs.remove('currentLng');
+      await prefs.remove('destinationLat'); // Xóa thông tin vị trí điểm đến
+      await prefs.remove('destinationLng');
+      await prefs.remove('driverName'); // Xóa thông tin tài xế
+      await prefs.remove('driverPhone');
+      await prefs.remove('bookingId');
+      await prefs.remove('driverId');
+
+      // Đặt lại các biến trong trạng thái để trở về trang cũ
+      setState(() {
+        _currentLocation = null;
+        _endLocation = null;
+        customerLocation = null;
+        customerName = null;
+        phoneNumber = null;
+        hasAcknowledgedOrder = false;
+      });
+
+      // Thông báo cho người dùng
+      showTemporaryMessage(context, "Booking cleared successfully!");
+    } catch (error) {
+      print("Error clearing booking status: $error");
+      showTemporaryMessage(context, "Error clearing booking, please try again.");
+    }
+  }
 
   Future<void> getDriverById(int driverId) async {
-    final String apiUrl = 'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/$driverId'; // Đặt URL API chính xác
+    final String apiUrl = 'http://10.0.2.2:8080/api/drivers/$driverId'; // Đặt URL API chính xác
     print('check tai xe ');
     try {
       final response = await http.get(Uri.parse(apiUrl));
@@ -139,7 +189,7 @@ class _OrderState extends State<Order> {
   Future<void> _checkUnfinishedBooking(int driverId) async {
     try {
       final response = await http.get(
-        Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/unfinished/$driverId'),
+        Uri.parse('http://10.0.2.2:8080/api/bookings/unfinished/$driverId'),
       );
 
       if (response.statusCode == 200 && response.body.isNotEmpty) {
@@ -176,12 +226,13 @@ class _OrderState extends State<Order> {
 
 
   // Send API request to check if the driver has a ride request
+  // Send API request to check if the driver has a ride request
   Future<void> _checkDriverBooking() async {
     final driverId = widget.driverId;
 
-    if (driverId != null) {
+    if (driverId != null && !hasAcknowledgedOrder) {  // Chỉ kiểm tra đơn hàng mới nếu chưa xác nhận
       final response = await http.get(
-        Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/check-driver/$driverId'),
+        Uri.parse('http://10.0.2.2:8080/api/drivers/check-driver/$driverId'),
       );
 
       if (response.statusCode == 200 && response.body.isNotEmpty) {
@@ -204,15 +255,13 @@ class _OrderState extends State<Order> {
           phoneNumber = newPhoneNumber;
           _endLocation = LatLng(destinationLatitude, destinationLongitude); // Cập nhật vị trí đến
         });
-        print(customerLocation);
-        print(_endLocation);
-        // Show notification only if it hasn't been displayed yet
-        if (!hasNewOrderNotification) {
+
+        // Show notification only if it hasn't been acknowledged
+        if (!hasAcknowledgedOrder) {
           _showNotification(
               'Customer: $customerName, Phone: $phoneNumber\nPickup: ($pickupLatitude, $pickupLongitude)\nDestination: ($destinationLatitude, $destinationLongitude)');
           hasNewOrderNotification = true; // Mark that the notification has been displayed
         }
-
 
         // Update both pickup and destination locations on the map
         _getPolyline(); // Cập nhật tuyến đường giữa vị trí tài xế, điểm đón và điểm đến
@@ -224,12 +273,13 @@ class _OrderState extends State<Order> {
 
 
 
+
   // Send API request to update location
   Future<void> _sendLocationUpdate() async {
     if (_currentLocation != null) {
       final response = await http.post(
         Uri.parse(
-            'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/patientlocation/update-location'),
+            'http://10.0.2.2:8080/api/patientlocation/update-location'),
         headers: {
           'Content-Type': 'application/json',
         },
@@ -254,17 +304,8 @@ class _OrderState extends State<Order> {
 
 
   // Start sending periodic location updates
-  void _startLocationUpdates() {
-    Timer.periodic(Duration(seconds: 5), (timer) {
-      _sendLocationUpdate();
-      // Send driver's location to server
-      if (widget.driverId != null) {
-        getDriverById(widget.driverId!); // Sử dụng widget.driverId thay vì driverId chưa được khai báo
-      } else {
-        print("Driver ID is null");
-      }
-    });
-  }
+
+
 
 
 
@@ -282,7 +323,8 @@ class _OrderState extends State<Order> {
               onPressed: () {
                 Navigator.of(context).pop();
                 setState(() {
-                  notification = true;  // Đặt thành true sau khi thông báo được hiển thị
+                  notification = true;
+                  hasAcknowledgedOrder = true; // Tài xế đã xác nhận thông báo
                 });
               },
             ),
@@ -291,6 +333,7 @@ class _OrderState extends State<Order> {
       },
     );
   }
+
 
 
   // Get current location from GPS
@@ -533,7 +576,6 @@ class _OrderState extends State<Order> {
             TextButton(
               child: Text("Confirm"),
               onPressed: () {
-                // Logic xác nhận đơn hàng ở đây
                 Navigator.of(context).pop();
                 _upDateBookingStatus(bookingId2);
               },
@@ -543,6 +585,7 @@ class _OrderState extends State<Order> {
       },
     );
   }
+
 
 
   // Hàm để hiển thị thông báo
