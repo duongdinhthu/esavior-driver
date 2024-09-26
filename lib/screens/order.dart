@@ -126,38 +126,45 @@ class _OrderState extends State<Order> {
   }
   Future<void> _clearBookingStatus() async {
     try {
-      // Gọi hàm để cập nhật trạng thái booking sang "Completed"
-      await _upDateBookingStatus(bookingId2);
-
-      // Xóa thông tin booking trong SharedPreferences
+      // Kiểm tra nếu trạng thái đã xóa booking chưa
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('isSuccessBooked'); // Xóa trạng thái đã đặt chỗ thành công
-      await prefs.remove('currentLat'); // Xóa thông tin vị trí hiện tại
-      await prefs.remove('currentLng');
-      await prefs.remove('destinationLat'); // Xóa thông tin vị trí điểm đến
-      await prefs.remove('destinationLng');
-      await prefs.remove('driverName'); // Xóa thông tin tài xế
-      await prefs.remove('driverPhone');
-      await prefs.remove('bookingId');
-      await prefs.remove('driverId');
+      bool hasShownMessage = prefs.getBool('hasShownMessage') ?? false;
 
-      // Đặt lại các biến trong trạng thái để trở về trang cũ
-      setState(() {
-        _currentLocation = null;
-        _endLocation = null;
-        customerLocation = null;
-        customerName = null;
-        phoneNumber = null;
-        hasAcknowledgedOrder = false;
-      });
+      if (!hasShownMessage) {
+        // Gọi hàm để cập nhật trạng thái booking sang "Completed"
 
-      // Thông báo cho người dùng
-      showTemporaryMessage(context, "Booking cleared successfully!");
+        // Xóa thông tin booking trong SharedPreferences
+        await prefs.remove('isSuccessBooked'); // Xóa trạng thái đã đặt chỗ thành công
+        await prefs.remove('currentLat'); // Xóa thông tin vị trí hiện tại
+        await prefs.remove('currentLng');
+        await prefs.remove('destinationLat'); // Xóa thông tin vị trí điểm đến
+        await prefs.remove('destinationLng');
+        await prefs.remove('driverName'); // Xóa thông tin tài xế
+        await prefs.remove('driverPhone');
+        await prefs.remove('bookingId');
+        await prefs.remove('driverId');
+
+        // Đặt lại các biến trong trạng thái để trở về trang cũ
+        setState(() {
+          _endLocation = null;
+          customerLocation = null;
+          customerName = null;
+          phoneNumber = null;
+          hasAcknowledgedOrder = false;
+        });
+
+        // Thông báo cho người dùng chỉ hiển thị một lần
+        showTemporaryMessage(context, "Booking cleared successfully!");
+
+        // Đánh dấu đã hiển thị thông báo
+        await prefs.setBool('hasShownMessage', true);
+      }
     } catch (error) {
       print("Error clearing booking status: $error");
       showTemporaryMessage(context, "Error clearing booking, please try again.");
     }
   }
+
 
   Future<void> getDriverById(int driverId) async {
     final String apiUrl = 'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/$driverId'; // Đặt URL API chính xác
@@ -266,6 +273,7 @@ class _OrderState extends State<Order> {
         // Update both pickup and destination locations on the map
         _getPolyline(); // Cập nhật tuyến đường giữa vị trí tài xế, điểm đón và điểm đến
       } else {
+        _clearBookingStatus();
         print("No new ride request information.");
       }
     }
