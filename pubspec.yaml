@@ -25,6 +25,8 @@ dependencies:
   cloud_firestore: any
   firebase_database: any
   shared_preferences: any
+  workmanager: any
+  flutter_local_notifications: any
 
 dev_dependencies:
   flutter_test:

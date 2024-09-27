@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+
 const primaryColor = Color.fromARGB(255, 200, 50, 0);
 const whiteColor = Color.fromARGB(255, 255, 255, 255);
 const blackColor = Color.fromARGB(255, 0, 0, 0);
@@ -44,30 +46,24 @@ class _LoginState extends State<Login> {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        print('Response Data: $data');
-
-        // Lưu toàn bộ thông tin tài xế
         final Map<String, dynamic> driverData = data;
-
-        // Lấy driverId từ thông tin tài xế
         final int driverId = driverData['driverId'];
+
+        // Lưu trạng thái đăng nhập vào SharedPreferences
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isLoggedIn', true); // Đánh dấu đã đăng nhập
+        await prefs.setString('userType', 'driver'); // Lưu loại người dùng
+        await prefs.setInt('driverId', driverId); // Lưu driverId
 
         // Gọi hàm onLogin và truyền driverId vào
         widget.onLogin(driverId, driverData);
 
-        // Nếu cần lưu driverData vào trạng thái hoặc truyền đến màn hình khác, bạn có thể làm điều đó ở đây
-        // Ví dụ: Lưu driverData vào một biến toàn cục hoặc trong provider/state management
-
         showTemporaryMessage(context, "Log in successfully!");
-
       } else {
-        print('Status Code: ${response.statusCode}');
-        print('Response Body: ${response.body}');
         showTemporaryMessage(context, "Invalid email or password.");
       }
     } catch (error) {
       showTemporaryMessage(context, "Error during login. Please try again.");
-      print(error);
     } finally {
       setState(() {
         isLoading = false;

@@ -45,4 +45,8 @@ android {
 flutter {
     source = "../.."
 }
+dependencies {
+    implementation "androidx.work:work-runtime-ktx:2.8.1"
+    // Các dependencies khác nếu có...
+}
 apply plugin: 'com.google.gms.google-services'

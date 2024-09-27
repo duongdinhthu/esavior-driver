@@ -66,6 +66,19 @@ class _OrderState extends State<Order> {
       _getCurrentLocationFromGPS();
     }
   }
+  void _resetScreen() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Order(
+          isLoggedIn: widget.isLoggedIn,
+          onLogout: widget.onLogout,
+          driverId: widget.driverId,
+          driverData: widget.driverData,
+        ),
+      ),
+    );
+  }
 
 
   @override
@@ -77,9 +90,11 @@ class _OrderState extends State<Order> {
     // In ra thông báo hoàn thành đơn hàng
   void _startLocationUpdates() {
     Timer.periodic(Duration(seconds: 5), (timer) {
+      print('Driver ID after clearing: ${widget.driverId}'); // Thêm log kiểm tra
       _sendLocationUpdate();
+      print(widget.driverId);
       // Send driver's location to server
-      if (widget.driverId != null && !hasAcknowledgedOrder) {  // Chỉ kiểm tra nếu tài xế chưa xác nhận đơn hàng
+      if (widget.driverId != null) {  // Chỉ kiểm tra nếu tài xế chưa xác nhận đơn hàng
         getDriverById(widget.driverId!);
       } else {
         print("Driver ID is null or order has been acknowledged");
@@ -88,6 +103,7 @@ class _OrderState extends State<Order> {
   }
   Future<void> _upDateBookingStatus(int? bookingId1) async {
     print('thuc hien goi aPi chuyen trang thai booking sang complete');
+    print(bookingId1.toString());
     try {
       String status = 'Completed';
 
@@ -106,6 +122,10 @@ class _OrderState extends State<Order> {
 
       if (response.statusCode == 200) {
         showTemporaryMessage(context, "Emergency booking complete!");
+        String status1 = "Active";
+        await _updateDriverStatus(widget.driverId,
+            status1);
+        _resetScreen();
         _clearBookingStatus();
       } else {
         showTemporaryMessage(context, "Error during submit, Please try again.");
@@ -128,8 +148,6 @@ class _OrderState extends State<Order> {
   Future<void> _clearBookingStatus() async {
     try {
       // Gọi hàm để cập nhật trạng thái booking sang "Completed"
-      await _upDateBookingStatus(bookingId2);
-
       // Xóa thông tin booking trong SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('isSuccessBooked'); // Xóa trạng thái đã đặt chỗ thành công
@@ -139,17 +157,16 @@ class _OrderState extends State<Order> {
       await prefs.remove('destinationLng');
       await prefs.remove('driverName'); // Xóa thông tin tài xế
       await prefs.remove('driverPhone');
-      await prefs.remove('bookingId');
-      await prefs.remove('driverId');
 
       // Đặt lại các biến trong trạng thái để trở về trang cũ
       setState(() {
-        _currentLocation = null;
         _endLocation = null;
         customerLocation = null;
         customerName = null;
         phoneNumber = null;
         hasAcknowledgedOrder = false;
+        print('Driver ID after clearing: ${widget.driverId}'); // Thêm log kiểm tra
+
       });
 
       // Thông báo cho người dùng
@@ -159,11 +176,7 @@ class _OrderState extends State<Order> {
       showTemporaryMessage(context, "Error clearing booking, please try again.");
     }
   }
-  void startCheckingBookingStatus(int? bookingId2) {
-    _timer = Timer.periodic(Duration(seconds: 5), (Timer timer) async {
-      await _checkBookingStatus(bookingId2);
-    });
-  }
+
   Future<void> _checkBookingStatus(int? bookingId2) async {
     try {
       // Gọi API để kiểm tra trạng thái booking
@@ -176,19 +189,8 @@ class _OrderState extends State<Order> {
 
         // Kiểm tra nếu `bookingStatus` là 'Completed'
         if (bookingData['bookingStatus'] == 'Completed') {
-          _clearBookingStatus(); // Xóa booking sau khi hoàn thành
-
-          setState(() {
-            // Đặt lại trạng thái của các biến để giống như trạng thái ban đầu khi mới login
-            _endLocation = null;
-            customerLocation = null;
-            customerName = null;
-            phoneNumber = null;
-            hasAcknowledgedOrder = false;
-          });
 
           // Thông báo cho người dùng về việc hoàn thành đặt chỗ
-          showTemporaryMessage(context, "Booking completed and reset to initial state!");
         }
       } else {
         print('Failed to load booking');
@@ -200,21 +202,19 @@ class _OrderState extends State<Order> {
 
   Future<void> getDriverById(int driverId) async {
     final String apiUrl = 'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/$driverId'; // Đặt URL API chính xác
-    print('check tai xe ');
+    print('check tai xe '+driverId.toString());
     try {
       final response = await http.get(Uri.parse(apiUrl));
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> data = json.decode(response.body);
-
         // Kiểm tra nếu status là "Active"
         if (data['status'] == 'Active') {
           print('Driver is active: ${data['driverName']}');
           _checkDriverBooking(); // Check for new ride request information
-        } else {
+        } else if(data['status'] == 'Deactive'){
           print('Tài xế chưa active, đang kiểm tra đơn hàng chưa hoàn thành...');
             _checkUnfinishedBooking(driverId);
-
         }
       } else if (response.statusCode == 404) {
         print('Driver not found');
@@ -223,6 +223,28 @@ class _OrderState extends State<Order> {
       }
     } catch (e) {
       print('Error occurred: $e');
+    }
+  }
+  Future<void> _updateDriverStatus(int? driverId, String status) async {
+    try {
+      print("driver_id" + driverId.toString() + "status la:" + status);
+      final response = await http.post(
+        Uri.parse(
+            'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/update-status'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'driverId': driverId,
+          'status': status,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        print("Driver status updated successfully!");
+      } else {
+        print('Error: ${response.statusCode}, ${response.body}');
+      }
+    } catch (error) {
+      print('Exception: $error');
     }
   }
   Future<void> _checkUnfinishedBooking(int driverId) async {
@@ -249,15 +271,16 @@ class _OrderState extends State<Order> {
           this.customerName = customerName;
           this.phoneNumber = phoneNumber;
         });
-        startCheckingBookingStatus(bookingId2);
+        _checkBookingStatus(bookingId2);
         print(data.toString() );
         print('booking id chưa hoàn thành :' + bookingId.toString());
-        if(notification == true){
+        if(notification == true && hasAcknowledgedOrder == true ){
 
           _showNotification('Đơn hàng chưa hoàn thành: Khách hàng $customerName, Điểm đón: ($pickupLatitude, $pickupLongitude), Điểm đến: ($destinationLatitude, $destinationLongitude)');
 }
       } else {
         print('Không có đơn hàng chưa hoàn thành.');
+
       }
     } catch (e) {
       print('Lỗi khi kiểm tra đơn hàng chưa hoàn thành: $e');
@@ -270,7 +293,7 @@ class _OrderState extends State<Order> {
   Future<void> _checkDriverBooking() async {
     final driverId = widget.driverId;
 
-    if (driverId != null && !hasAcknowledgedOrder) {  // Chỉ kiểm tra đơn hàng mới nếu chưa xác nhận
+    if (driverId != null) {  // Chỉ kiểm tra đơn hàng mới nếu chưa xác nhận
       final response = await http.get(
         Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/check-driver/$driverId'),
       );
@@ -306,6 +329,7 @@ class _OrderState extends State<Order> {
         // Update both pickup and destination locations on the map
         _getPolyline(); // Cập nhật tuyến đường giữa vị trí tài xế, điểm đón và điểm đến
       } else {
+        if(hasAcknowledgedOrder == true)
         print("No new ride request information.");
       }
     }
@@ -364,7 +388,9 @@ class _OrderState extends State<Order> {
                 Navigator.of(context).pop();
                 setState(() {
                   notification = true;
-                  hasAcknowledgedOrder = true; // Tài xế đã xác nhận thông báo
+                  hasAcknowledgedOrder = true;
+                  hasNewOrderNotification = true;
+                  // Tài xế đã xác nhận thông báo
                 });
               },
             ),
@@ -618,6 +644,8 @@ class _OrderState extends State<Order> {
               onPressed: () {
                 Navigator.of(context).pop();
                 _upDateBookingStatus(bookingId2);
+                print('confirm booking ' + bookingId2.toString());
+                showTemporaryMessage(context, "Booking completed !");
               },
             ),
           ],

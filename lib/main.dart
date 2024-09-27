@@ -1,16 +1,130 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'screens/login.dart';
 import 'screens/order.dart';
 import 'screens/profile.dart';
 import 'screens/dashboard.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:workmanager/workmanager.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 const primaryColor = Color.fromARGB(255, 200, 50, 0);
 const whiteColor = Color.fromARGB(255, 255, 255, 255);
 const blackColor = Color.fromARGB(255, 0, 0, 0);
 
+void callbackDispatcher() {
+  // Khởi tạo FlutterLocalNotificationsPlugin
+  FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+  // Cài đặt khởi tạo thông báo cho Android
+  var initializationSettingsAndroid = AndroidInitializationSettings('app_icon'); // Đặt tên icon cho thông báo
+  var initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
+
+  // Khởi tạo plugin
+  flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
+  // Hàm để thực hiện task
+  Workmanager().executeTask((task, inputData) async {
+    int driverId = inputData!['driverId'];
+    final String apiUrl = 'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/$driverId';
+
+    Timer? timer;
+
+    try {
+      final response = await http.get(Uri.parse(apiUrl));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+
+        // Kiểm tra trạng thái tài xế và trạng thái mở ứng dụng
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        bool isAppOpened = prefs.getBool('isAppOpened') ?? false;
+
+        if (!isAppOpened) {
+          if (data['status'] == 'Active') {
+            print('Driver is active: ${data['driverName']}');
+
+            // Gọi hàm để kiểm tra đơn hàng cứ mỗi 5 giây
+            timer = Timer.periodic(Duration(seconds: 5), (timer) async {
+              await _checkDriverBooking(driverId, flutterLocalNotificationsPlugin); // Hàm này gọi API check đơn hàng
+            });
+          } else {
+            print('Driver chưa active, kiểm tra đơn hàng chưa hoàn thành.');
+            timer = Timer.periodic(Duration(seconds: 5), (timer) async {
+              await _checkUnfinishedBooking(driverId, flutterLocalNotificationsPlugin); // Gọi hàm kiểm tra đơn hàng chưa hoàn thành
+            });
+          }
+        } else {
+          // Nếu tài xế đã mở ứng dụng, dừng việc gửi thông báo
+          timer?.cancel();
+          print('Driver đã mở ứng dụng, dừng thông báo.');
+        }
+      } else {
+        print('Failed to load driver: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error occurred: $e');
+    }
+
+    return Future.value(true);
+  });
+}
+
+
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Khởi tạo WorkManager
+  Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
+
   runApp(MyApp());
+}
+Future<void> _checkUnfinishedBooking(int driverId, FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin) async {
+  final response = await http.get(
+    Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/unfinished/$driverId'),
+  );
+
+  // Nếu request trả về 200, sẽ gửi thông báo liên tục
+  if (response.statusCode == 200 && response.body.isNotEmpty) {
+    // Gửi thông báo đơn giản về đơn hàng chưa hoàn thành
+    await _showNotification(
+      flutterLocalNotificationsPlugin,
+      'Unfinished Booking',
+      'You have an unfinished booking. Please complete it.',
+    );
+  } else {
+    print('No unfinished booking found.');
+  }
+}
+
+Future<void> _checkDriverBooking(int driverId, FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin) async {
+  final response = await http.get(
+    Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/check-driver/$driverId'),
+  );
+
+  // Nếu request trả về 200, sẽ gửi thông báo mỗi 5 giây
+  if (response.statusCode == 200) {
+    // Gửi thông báo
+    await _showNotification(flutterLocalNotificationsPlugin,
+        'New Ride Request', 'You have a new ride request. Tap to view details.');
+  } else {
+    print("No ride request available.");
+  }
+}
+
+Future<void> _showNotification(FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin, String title, String body) async {
+  var androidPlatformChannelSpecifics = AndroidNotificationDetails(
+    'your_channel_id', 'your_channel_name',
+    importance: Importance.max,
+    priority: Priority.high,
+    showWhen: false,
+  );
+
+  var platformChannelSpecifics = NotificationDetails(android: androidPlatformChannelSpecifics);
+  await flutterLocalNotificationsPlugin.show(0, title, body, platformChannelSpecifics, payload: 'ride_request');
 }
 
 class MyApp extends StatefulWidget {
@@ -30,7 +144,29 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    // Kết nối với WebSocket khi ứng dụng khởi động
+    checkLoginState(); // Kiểm tra trạng thái đăng nhập khi khởi động ứng dụng
+    markAppAsOpened(); // Đánh dấu rằng ứng dụng đã được mở
+  }
+
+  Future<void> markAppAsOpened() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isAppOpened', true); // Đánh dấu rằng ứng dụng đã được mở
+  }
+  Future<void> checkLoginState() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    bool? isLoggedIn = prefs.getBool('isLoggedIn');
+    String? userType = prefs.getString('userType');
+
+    if (isLoggedIn != null && isLoggedIn && userType == 'driver') {
+      int? driverId = prefs.getInt('driverId');
+      // Giả sử driverData được lưu dưới dạng JSON String (nếu cần)
+      setState(() {
+        this.isLoggedIn = true;
+        this.driverId = driverId;
+        // Khôi phục dữ liệu driverData nếu đã lưu trước đó (tùy vào cách bạn lưu driverData)
+        // driverData = jsonDecode(prefs.getString('driverData') ?? '{}');
+      });
+    }
   }
 
   @override
@@ -38,7 +174,10 @@ class _MyAppState extends State<MyApp> {
     _webSocket?.close(); // Đóng kết nối WebSocket khi ứng dụng bị hủy
     super.dispose();
   }
-
+  Future<void> markAppAsClosed() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isAppOpened', false); // Đánh dấu rằng ứng dụng đã được đóng
+  }
   // Kết nối WebSocket
 
 
@@ -68,19 +207,35 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       isLoggedIn = true;
       this.driverId = driverId;
-      this.driverData = data; // Lưu driverData
-      _selectedIndex = 1; // Chuyển sang trang Order sau khi đăng nhập
+      this.driverData = data;
+      _selectedIndex = 1;
     });
+
+    // Đăng ký task nền để kiểm tra đơn hàng mỗi 15 phút
+    Workmanager().registerPeriodicTask(
+      "checkDriverOrderTask", // Tên task
+      "simpleTask",           // Mô tả task
+      inputData: {"driverId": driverId}, // Truyền driverId vào task nền
+      frequency: const Duration(minutes: 15), // Chạy mỗi 15 phút
+    );
   }
 
-  void handleLogout(BuildContext context) {
+
+  void handleLogout(BuildContext context) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+
+    // Hủy task WorkManager khi tài xế đăng xuất
+    Workmanager().cancelAll();
+
     setState(() {
       isLoggedIn = false;
       driverId = null;
-      driverData = null; // Reset driverData khi logout
-      _selectedIndex = 1; // Chuyển về trang Order khi đăng xuất
+      driverData = null;
+      _selectedIndex = 1;
     });
   }
+
 
   void _onItemTapped(int index) {
     setState(() {
