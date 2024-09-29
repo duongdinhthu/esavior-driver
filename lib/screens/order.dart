@@ -54,6 +54,7 @@ class _OrderState extends State<Order> {
     _getCurrentLocationFromGPS();
     // Start periodic location updates and check for ride requests
     _startLocationUpdates();
+    _loadDriverState(); // Tải lại trạng thái khi khởi động lại ứng dụng
 
 
     if (widget.driverData.containsKey('latitude') &&
@@ -79,15 +80,53 @@ class _OrderState extends State<Order> {
       ),
     );
   }
+  Future<void> _loadDriverState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final double? driverLat = prefs.getDouble('driverLat');
+    final double? driverLng = prefs.getDouble('driverLng');
+    final double? customerLat = prefs.getDouble('customerLat');
+    final double? customerLng = prefs.getDouble('customerLng');
+    final String? savedCustomerName = prefs.getString('customerName');
+    final String? savedPhoneNumber = prefs.getString('phoneNumber');
+    final int? savedBookingId = prefs.getInt('bookingId');
+
+    setState(() {
+      if (driverLat != null && driverLng != null) {
+        _currentLocation = LatLng(driverLat, driverLng);
+      }
+      if (customerLat != null && customerLng != null) {
+        customerLocation = LatLng(customerLat, customerLng);
+      }
+      customerName = savedCustomerName;
+      phoneNumber = savedPhoneNumber;
+      bookingId2 = savedBookingId;
+    });
+  }
 
 
   @override
   void dispose() {
     _positionStream?.cancel();
     _locationTimer?.cancel();
+    _saveDriverState(); // Lưu trạng thái trước khi thoát
     super.dispose();
   }
-    // In ra thông báo hoàn thành đơn hàng
+  Future<void> _saveDriverState() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_currentLocation != null) {
+      prefs.setDouble('driverLat', _currentLocation!.latitude);
+      prefs.setDouble('driverLng', _currentLocation!.longitude);
+    }
+    if (customerLocation != null) {
+      prefs.setDouble('customerLat', customerLocation!.latitude);
+      prefs.setDouble('customerLng', customerLocation!.longitude);
+    }
+    prefs.setString('customerName', customerName ?? '');
+    prefs.setString('phoneNumber', phoneNumber ?? '');
+    prefs.setInt('bookingId', bookingId2 ?? 0);
+  }
+
+  // In ra thông báo hoàn thành đơn hàng
   void _startLocationUpdates() {
     Timer.periodic(Duration(seconds: 5), (timer) {
       print('Driver ID after clearing: ${widget.driverId}'); // Thêm log kiểm tra
