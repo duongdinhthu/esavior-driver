@@ -394,8 +394,6 @@ class _OrderState extends State<Order> {
       );
 
       // Cập nhật vị trí trung tâm của bản đồ theo vị trí tài xế
-      _mapController.move(_currentLocation!, 12.0); // Mức độ zoom là 12.0
-
       if (response.statusCode == 200) {
         print("Location update successful");
       } else {
@@ -490,8 +488,6 @@ class _OrderState extends State<Order> {
         location.latitude,
         location.longitude,
       );
-
-
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
         setState(() {
@@ -519,7 +515,7 @@ class _OrderState extends State<Order> {
   @override
   Widget build(BuildContext context) {
     final double screenHeight = MediaQuery.of(context).size.height;
-
+    final double screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
       body: SingleChildScrollView(
@@ -539,7 +535,6 @@ class _OrderState extends State<Order> {
                     subdomains: ['a', 'b', 'c'],
                   ),
                   MarkerLayer(
-
                     markers: [
                       if (_currentLocation != null)
                         Marker(
@@ -597,6 +592,23 @@ class _OrderState extends State<Order> {
                 child: ListTile(
                   title: Text('Current Address: $_currentAddress'),
                 ),
+              ),
+            ),
+            // Nút di chuyển về vị trí tài xế (ở giữa chiều ngang và phía trên)
+            Positioned(
+              top: screenHeight * 0.55, // Đưa nút lên phía trên khoảng 15% chiều cao màn hình
+              right: screenWidth * 0.45, // Đặt nút ở góc phải với khoảng cách 5% chiều rộng
+              child: FloatingActionButton(
+                onPressed: () {
+                  if (_currentLocation != null) {
+                    // Di chuyển map về vị trí tài xế và zoom đến mức 12.0
+                    _mapController.move(_currentLocation!, 12.0);
+                  } else {
+                    print('Vị trí tài xế hiện chưa có.');
+                  }
+                },
+                child: Icon(Icons.my_location),
+                tooltip: 'Di chuyển đến vị trí tài xế',
               ),
             ),
             if (customerName != null && phoneNumber != null) ...[
@@ -661,8 +673,6 @@ class _OrderState extends State<Order> {
       ),
     );
   }
-
-
   // Hàm để xử lý xác nhận đơn hàng
   void _confirmOrder() {
     showDialog(
@@ -692,8 +702,6 @@ class _OrderState extends State<Order> {
       },
     );
   }
-
-
 
   // Hàm để hiển thị thông báo
   void _showOrderNotification(String message) { // Đổi tên hàm

@@ -27,7 +27,7 @@ dependencies:
   shared_preferences: any
   workmanager: any
   flutter_local_notifications: any
-
+  web_socket_channel: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
