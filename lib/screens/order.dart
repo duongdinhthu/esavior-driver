@@ -6,10 +6,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:http/http.dart' as http; // Import HTTP library
+import 'package:project_flutter/main.dart';
 import 'dart:convert'; // Import for JSON handling
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 
 class Order extends StatefulWidget {
   final bool isLoggedIn;
@@ -17,14 +17,15 @@ class Order extends StatefulWidget {
   final int? driverId;
   final Map<String, dynamic> driverData;
 
-
-  Order({required this.isLoggedIn, required this.onLogout, this.driverId, required this.driverData});
-
+  Order(
+      {required this.isLoggedIn,
+      required this.onLogout,
+      this.driverId,
+      required this.driverData});
 
   @override
   _OrderState createState() => _OrderState();
 }
-
 
 class _OrderState extends State<Order> {
   LatLng? _currentLocation;
@@ -34,12 +35,14 @@ class _OrderState extends State<Order> {
   LatLng? customerLocation;
   String? customerName;
   String? phoneNumber;
-  bool hasNewOrderNotification = false; // Variable to check if notification has been shown
+  bool hasNewOrderNotification =
+      false; // Variable to check if notification has been shown
   StreamSubscription<Position>? _positionStream;
   MapController _mapController = MapController();
   bool notification = false;
   int? bookingId2;
-  bool hasAcknowledgedOrder = false;  // Biến để theo dõi xem tài xế đã xác nhận đơn hàng chưa
+  bool hasAcknowledgedOrder =
+      false; // Biến để theo dõi xem tài xế đã xác nhận đơn hàng chưa
   Timer? _locationTimer;
   Timer? _timer;
 
@@ -56,7 +59,6 @@ class _OrderState extends State<Order> {
     _startLocationUpdates();
     _loadDriverState(); // Tải lại trạng thái khi khởi động lại ứng dụng
 
-
     if (widget.driverData.containsKey('latitude') &&
         widget.driverData.containsKey('longitude')) {
       double latitude = widget.driverData['latitude'];
@@ -67,6 +69,7 @@ class _OrderState extends State<Order> {
       _getCurrentLocationFromGPS();
     }
   }
+
   void _resetScreen() {
     Navigator.pushReplacement(
       context,
@@ -80,6 +83,7 @@ class _OrderState extends State<Order> {
       ),
     );
   }
+
   Future<void> _loadDriverState() async {
     final prefs = await SharedPreferences.getInstance();
     final double? driverLat = prefs.getDouble('driverLat');
@@ -99,17 +103,18 @@ class _OrderState extends State<Order> {
       if (customerLat != null && customerLng != null) {
         customerLocation = LatLng(customerLat, customerLng);
       }
-      if(endLat != null && endLng != null){
-        _endLocation  = LatLng(endLat, endLng);
+      if (endLat != null && endLng != null) {
+        _endLocation = LatLng(endLat, endLng);
       }
-      if(savedCustomerName!=null && savedPhoneNumber!=null && savedBookingId!=null){
+      if (savedCustomerName != null &&
+          savedPhoneNumber != null &&
+          savedBookingId != null) {
         customerName = savedCustomerName;
         phoneNumber = savedPhoneNumber;
         bookingId2 = savedBookingId;
       }
     });
   }
-
 
   @override
   void dispose() {
@@ -118,6 +123,7 @@ class _OrderState extends State<Order> {
     _saveDriverState(); // Lưu trạng thái trước khi thoát
     super.dispose();
   }
+
   Future<void> _saveDriverState() async {
     final prefs = await SharedPreferences.getInstance();
     if (_currentLocation != null) {
@@ -128,7 +134,7 @@ class _OrderState extends State<Order> {
       prefs.setDouble('customerLat', customerLocation!.latitude);
       prefs.setDouble('customerLng', customerLocation!.longitude);
     }
-    if(_endLocation != null){
+    if (_endLocation != null) {
       prefs.setDouble('endLat', _endLocation!.latitude);
       prefs.setDouble('endLng', _endLocation!.longitude);
     }
@@ -140,17 +146,20 @@ class _OrderState extends State<Order> {
   // In ra thông báo hoàn thành đơn hàng
   void _startLocationUpdates() {
     Timer.periodic(Duration(seconds: 5), (timer) {
-      print('Driver ID after clearing: ${widget.driverId}'); // Thêm log kiểm tra
+      print(
+          'Driver ID after clearing: ${widget.driverId}'); // Thêm log kiểm tra
       _sendLocationUpdate();
       print(widget.driverId);
       // Send driver's location to server
-      if (widget.driverId != null) {  // Chỉ kiểm tra nếu tài xế chưa xác nhận đơn hàng
+      if (widget.driverId != null) {
+        // Chỉ kiểm tra nếu tài xế chưa xác nhận đơn hàng
         getDriverById(widget.driverId!);
       } else {
         print("Driver ID is null or order has been acknowledged");
       }
     });
   }
+
   Future<void> _upDateBookingStatus(int? bookingId1) async {
     print('thuc hien goi aPi chuyen trang thai booking sang complete');
     print(bookingId1.toString());
@@ -162,7 +171,8 @@ class _OrderState extends State<Order> {
 
       // Thay thế URL API của bạn vào đây
       final response = await http.post(
-        Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/update-status'),
+        Uri.parse(
+            'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/update-status'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'bookingStatus': status,
@@ -173,8 +183,7 @@ class _OrderState extends State<Order> {
       if (response.statusCode == 200) {
         showTemporaryMessage(context, "Emergency booking complete!");
         String status1 = "Active";
-        await _updateDriverStatus(widget.driverId,
-            status1);
+        await _updateDriverStatus(widget.driverId, status1);
         _resetScreen();
         _clearBookingStatus();
       } else {
@@ -186,6 +195,7 @@ class _OrderState extends State<Order> {
       print('Exception: $error');
     }
   }
+
   void showTemporaryMessage(BuildContext context, String message) {
     final snackBar = SnackBar(
       content: Text(message),
@@ -195,12 +205,14 @@ class _OrderState extends State<Order> {
     // Hiển thị SnackBar trên màn hình
     ScaffoldMessenger.of(context).showSnackBar(snackBar);
   }
+
   Future<void> _clearBookingStatus() async {
     try {
       // Gọi hàm để cập nhật trạng thái booking sang "Completed"
       // Xóa thông tin booking trong SharedPreferences
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('isSuccessBooked'); // Xóa trạng thái đã đặt chỗ thành công
+      await prefs
+          .remove('isSuccessBooked'); // Xóa trạng thái đã đặt chỗ thành công
       await prefs.remove('currentLat'); // Xóa thông tin vị trí hiện tại
       await prefs.remove('currentLng');
       await prefs.remove('destinationLat'); // Xóa thông tin vị trí điểm đến
@@ -215,22 +227,24 @@ class _OrderState extends State<Order> {
         customerName = null;
         phoneNumber = null;
         hasAcknowledgedOrder = false;
-        print('Driver ID after clearing: ${widget.driverId}'); // Thêm log kiểm tra
-
+        print(
+            'Driver ID after clearing: ${widget.driverId}'); // Thêm log kiểm tra
       });
 
       // Thông báo cho người dùng
       showTemporaryMessage(context, "Booking cleared successfully!");
     } catch (error) {
       print("Error clearing booking status: $error");
-      showTemporaryMessage(context, "Error clearing booking, please try again.");
+      showTemporaryMessage(
+          context, "Error clearing booking, please try again.");
     }
   }
 
   Future<void> _checkBookingStatus(int? bookingId2) async {
     try {
       // Gọi API để kiểm tra trạng thái booking
-      final response = await http.get(Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/$bookingId2'));
+      final response = await http.get(Uri.parse(
+          'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/$bookingId2'));
       print('check status booking with booking ' + bookingId2.toString());
 
       if (response.statusCode == 200) {
@@ -251,8 +265,9 @@ class _OrderState extends State<Order> {
   }
 
   Future<void> getDriverById(int driverId) async {
-    final String apiUrl = 'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/$driverId'; // Đặt URL API chính xác
-    print('check tai xe '+driverId.toString());
+    final String apiUrl =
+        'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/$driverId'; // Đặt URL API chính xác
+    print('check tai xe ' + driverId.toString());
     try {
       final response = await http.get(Uri.parse(apiUrl));
 
@@ -262,9 +277,10 @@ class _OrderState extends State<Order> {
         if (data['status'] == 'Active') {
           print('Driver is active: ${data['driverName']}');
           _checkDriverBooking(); // Check for new ride request information
-        } else if(data['status'] == 'Deactive'){
-          print('Tài xế chưa active, đang kiểm tra đơn hàng chưa hoàn thành...');
-            _checkUnfinishedBooking(driverId);
+        } else if (data['status'] == 'Deactive') {
+          print(
+              'Tài xế chưa active, đang kiểm tra đơn hàng chưa hoàn thành...');
+          _checkUnfinishedBooking(driverId);
         }
       } else if (response.statusCode == 404) {
         print('Driver not found');
@@ -275,6 +291,7 @@ class _OrderState extends State<Order> {
       print('Error occurred: $e');
     }
   }
+
   Future<void> _updateDriverStatus(int? driverId, String status) async {
     try {
       print("driver_id" + driverId.toString() + "status la:" + status);
@@ -297,10 +314,12 @@ class _OrderState extends State<Order> {
       print('Exception: $error');
     }
   }
+
   Future<void> _checkUnfinishedBooking(int driverId) async {
     try {
       final response = await http.get(
-        Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/unfinished/$driverId'),
+        Uri.parse(
+            'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/unfinished/$driverId'),
       );
 
       if (response.statusCode == 200 && response.body.isNotEmpty) {
@@ -322,30 +341,30 @@ class _OrderState extends State<Order> {
           this.phoneNumber = phoneNumber;
         });
         _checkBookingStatus(bookingId2);
-        print(data.toString() );
+        print(data.toString());
         print('booking id chưa hoàn thành :' + bookingId.toString());
-        if(notification == true && hasAcknowledgedOrder == true ){
-
-          _showNotification('Đơn hàng chưa hoàn thành: Khách hàng $customerName, Điểm đón: ($pickupLatitude, $pickupLongitude), Điểm đến: ($destinationLatitude, $destinationLongitude)');
-}
+        if (notification == true && hasAcknowledgedOrder == true) {
+          _showNotification(
+              'Đơn hàng chưa hoàn thành: Khách hàng $customerName, Điểm đón: ($pickupLatitude, $pickupLongitude), Điểm đến: ($destinationLatitude, $destinationLongitude)');
+        }
       } else {
         print('Không có đơn hàng chưa hoàn thành.');
-
       }
     } catch (e) {
       print('Lỗi khi kiểm tra đơn hàng chưa hoàn thành: $e');
     }
   }
 
-
   // Send API request to check if the driver has a ride request
   // Send API request to check if the driver has a ride request
   Future<void> _checkDriverBooking() async {
     final driverId = widget.driverId;
 
-    if (driverId != null) {  // Chỉ kiểm tra đơn hàng mới nếu chưa xác nhận
+    if (driverId != null) {
+      // Chỉ kiểm tra đơn hàng mới nếu chưa xác nhận
       final response = await http.get(
-        Uri.parse('https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/check-driver/$driverId'),
+        Uri.parse(
+            'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/check-driver/$driverId'),
       );
 
       if (response.statusCode == 200 && response.body.isNotEmpty) {
@@ -358,35 +377,37 @@ class _OrderState extends State<Order> {
         // Get both pickup and destination coordinates
         double pickupLatitude = data['latitude']; // Vị trí đón (pickup)
         double pickupLongitude = data['longitude']; // Vị trí đón (pickup)
-        double destinationLatitude = data['destinationLatitude']; // Vị trí đến (destination)
-        double destinationLongitude = data['destinationLongitude']; // Vị trí đến (destination)
+        double destinationLatitude =
+            data['destinationLatitude']; // Vị trí đến (destination)
+        double destinationLongitude =
+            data['destinationLongitude']; // Vị trí đến (destination)
 
         // Update customer pickup and destination locations
         setState(() {
-          customerLocation = LatLng(pickupLatitude, pickupLongitude); // Cập nhật vị trí đón
+          customerLocation =
+              LatLng(pickupLatitude, pickupLongitude); // Cập nhật vị trí đón
           customerName = newCustomerName;
           phoneNumber = newPhoneNumber;
-          _endLocation = LatLng(destinationLatitude, destinationLongitude); // Cập nhật vị trí đến
+          _endLocation = LatLng(
+              destinationLatitude, destinationLongitude); // Cập nhật vị trí đến
         });
 
         // Show notification only if it hasn't been acknowledged
         if (!hasAcknowledgedOrder) {
           _showNotification(
               'Customer: $customerName, Phone: $phoneNumber\nPickup: ($pickupLatitude, $pickupLongitude)\nDestination: ($destinationLatitude, $destinationLongitude)');
-          hasNewOrderNotification = true; // Mark that the notification has been displayed
+          hasNewOrderNotification =
+              true; // Mark that the notification has been displayed
         }
 
         // Update both pickup and destination locations on the map
         _getPolyline(); // Cập nhật tuyến đường giữa vị trí tài xế, điểm đón và điểm đến
       } else {
-        if(hasAcknowledgedOrder == true)
-        print("No new ride request information.");
+        if (hasAcknowledgedOrder == true)
+          print("No new ride request information.");
       }
     }
   }
-
-
-
 
   // Send API request to update location
   Future<void> _sendLocationUpdate() async {
@@ -413,13 +434,7 @@ class _OrderState extends State<Order> {
     }
   }
 
-
-
   // Start sending periodic location updates
-
-
-
-
 
   // Show notification
   void _showNotification(String message) {
@@ -448,20 +463,16 @@ class _OrderState extends State<Order> {
     );
   }
 
-
-
   // Get current location from GPS
   Future<void> _getCurrentLocationFromGPS() async {
     bool serviceEnabled;
     LocationPermission permission;
-
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       print('Location services are disabled.');
       return;
     }
-
 
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
@@ -472,17 +483,14 @@ class _OrderState extends State<Order> {
       }
     }
 
-
     if (permission == LocationPermission.deniedForever) {
       print('Location access denied permanently.');
       return;
     }
 
-
     Position position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
     );
-
 
     setState(() {
       _currentLocation = LatLng(position.latitude, position.longitude);
@@ -490,7 +498,6 @@ class _OrderState extends State<Order> {
       _getPolyline();
     });
   }
-
 
   // Update address based on coordinates
   Future<void> _updateAddress(LatLng location) async {
@@ -503,7 +510,7 @@ class _OrderState extends State<Order> {
         Placemark place = placemarks[0];
         setState(() {
           _currentAddress =
-          '${place.street}, ${place.locality}, ${place.country}';
+              '${place.street}, ${place.locality}, ${place.country}';
         });
       }
     } catch (e) {
@@ -511,17 +518,15 @@ class _OrderState extends State<Order> {
     }
   }
 
-
   // Update the route from the current location to the destination
   void _getPolyline() {
     polylinePoints = [
       if (_currentLocation != null) _currentLocation!,
-      if (_endLocation != null) _endLocation!, // Chỉ thêm _endLocation khi nó không null
+      if (_endLocation != null) _endLocation!,
+      // Chỉ thêm _endLocation khi nó không null
     ];
     setState(() {});
   }
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -529,71 +534,125 @@ class _OrderState extends State<Order> {
     final double screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
+      backgroundColor: whiteColor,
       body: SingleChildScrollView(
         child: Column(
           children: <Widget>[
-            SizedBox(
-              height: screenHeight * 0.7,
-              child: FlutterMap(
-                mapController: _mapController, // Gán MapController vào đây
-                options: MapOptions(
-                  center: _currentLocation ?? LatLng(21.0285, 105.8542),
-                  zoom: 12.0, // Đặt mức độ zoom ban đầu
-                ),
-                children: [
-                  TileLayer(
-                    urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    subdomains: ['a', 'b', 'c'],
-                  ),
-                  MarkerLayer(
-                    markers: [
-                      if (_currentLocation != null)
-                        Marker(
-                          width: 80.0,
-                          height: 80.0,
-                          point: _currentLocation!,
-                          builder: (ctx) => Icon(
-                            Icons.location_pin,
-                            color: Colors.red,
-                            size: 40.0,
-                          ),
-                        ),
-                      if (customerLocation != null)
-                        Marker(
-                          width: 80.0,
-                          height: 80.0,
-                          point: customerLocation!,
-                          builder: (ctx) => Icon(
-                            Icons.person_pin,
-                            color: Colors.green,
-                            size: 40.0,
-                          ),
-                        ),
-                      if (_endLocation != null)
-                        Marker(
-                          width: 80.0,
-                          height: 80.0,
-                          point: _endLocation!,
-                          builder: (ctx) => Icon(
-                            Icons.flag,
-                            color: Colors.blue,
-                            size: 40.0,
-                          ),
-                        ),
+            Stack(
+              children: [
+                SizedBox(
+                  height: screenHeight * 0.7,
+                  child: FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      center: _currentLocation ?? LatLng(21.0285, 105.8542),
+                      zoom: 12.0,
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        subdomains: ['a', 'b', 'c'],
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          if (_currentLocation != null)
+                            Marker(
+                              width: 80.0,
+                              height: 80.0,
+                              point: _currentLocation!,
+                              builder: (ctx) => Icon(
+                                Icons.location_pin,
+                                color: Colors.red,
+                                size: 40.0,
+                              ),
+                            ),
+                          if (customerLocation != null)
+                            Marker(
+                              width: 80.0,
+                              height: 80.0,
+                              point: customerLocation!,
+                              builder: (ctx) => Icon(
+                                Icons.person_pin,
+                                color: Colors.green,
+                                size: 40.0,
+                              ),
+                            ),
+                          if (_endLocation != null)
+                            Marker(
+                              width: 80.0,
+                              height: 80.0,
+                              point: _endLocation!,
+                              builder: (ctx) => Icon(
+                                Icons.flag,
+                                color: Colors.blue,
+                                size: 40.0,
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
+                ),
+                Positioned(
+                  bottom: 20.0,
+                  right: 20.0,
+                  child: Column(
+                    children: [
+                      FloatingActionButton(
+                        backgroundColor: primaryColor,
+                        onPressed: () {
+                          if (_currentLocation != null) {
+                            // Di chuyển map về vị trí tài xế và zoom đến mức 12.0
+                            _mapController.move(_currentLocation!, 12.0);
+                          } else {
+                            print('Vị trí tài xế hiện chưa có.');
+                          }
+                        },
+                        child: Icon(
+                          Icons.my_location,
+                          color: whiteColor,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      FloatingActionButton(
+                        backgroundColor: whiteColor,
+                        onPressed: () {
+                          _mapController.move(
+                              _mapController.center, _mapController.zoom + 1);
+                        },
+                        child: Icon(
+                          Icons.zoom_in,
+                          color: blackColor,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      FloatingActionButton(
+                        backgroundColor: whiteColor,
+                        onPressed: () {
+                          _mapController.move(
+                              _mapController.center, _mapController.zoom - 1);
+                        },
+                        child: Icon(
+                          Icons.zoom_out,
+                          color: blackColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12.0),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.3),
+                      color: Colors.grey.withOpacity(0.5),
                       spreadRadius: 2,
                       blurRadius: 5,
                       offset: Offset(0, 3),
@@ -605,33 +664,18 @@ class _OrderState extends State<Order> {
                 ),
               ),
             ),
-            // Nút di chuyển về vị trí tài xế (ở giữa chiều ngang và phía trên)
-            Positioned(
-              top: screenHeight * 0.55, // Đưa nút lên phía trên khoảng 15% chiều cao màn hình
-              right: screenWidth * 0.45, // Đặt nút ở góc phải với khoảng cách 5% chiều rộng
-              child: FloatingActionButton(
-                onPressed: () {
-                  if (_currentLocation != null) {
-                    // Di chuyển map về vị trí tài xế và zoom đến mức 12.0
-                    _mapController.move(_currentLocation!, 12.0);
-                  } else {
-                    print('Vị trí tài xế hiện chưa có.');
-                  }
-                },
-                child: Icon(Icons.my_location),
-                tooltip: 'Di chuyển đến vị trí tài xế',
-              ),
-            ),
-            if (customerName != null && phoneNumber != null) ...[
+            if ((customerName?.isNotEmpty ?? false) &&
+                (phoneNumber?.isNotEmpty ?? false)) ...[
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 12.0),
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12.0),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withOpacity(0.3),
+                        color: Colors.grey.withOpacity(0.5),
                         spreadRadius: 2,
                         blurRadius: 5,
                         offset: Offset(0, 3),
@@ -659,48 +703,75 @@ class _OrderState extends State<Order> {
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Column(
                   children: [
-                    SizedBox(height: 10.0), // Thêm khoảng cách phía trên nút (20.0 là giá trị bạn có thể tùy chỉnh)
+                    const SizedBox(height: 10.0),
                     ElevatedButton(
                       onPressed: _confirmOrder, // Gọi hàm xác nhận
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16.0), // Chỉ padding theo chiều dọc
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.0), // Bo góc
-                        ),
-                        minimumSize: Size(double.infinity, 50), // Mở rộng hết chiều ngang, với chiều cao là 50
-                        elevation: 12, // Độ đậm bóng (càng lớn thì bóng càng đậm)
-                        shadowColor: Colors.black.withOpacity(0.7), // Màu của bóng đổ
+                          padding: const EdgeInsets.symmetric(vertical: 16.0),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8.0), // Bo góc
+                          ),
+                          minimumSize: Size(double.infinity, 50),
+                          elevation: 12,
+                          shadowColor: Colors.black.withOpacity(0.7),
+                          backgroundColor: primaryColor),
+                      child: Text(
+                        'Completed',
+                        style: TextStyle(
+                            color: whiteColor,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold),
                       ),
-                      child: Text('Confirm'),
                     ),
                     SizedBox(height: 50.0), // Thêm margin dưới nút
                   ],
                 ),
               )
-
             ],
           ],
         ),
       ),
     );
   }
+
   // Hàm để xử lý xác nhận đơn hàng
   void _confirmOrder() {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text("Confirm Order"),
-          content: Text("Do you want to confirm this order?"),
+          title: Text("Confirm Completion",
+              style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: blackColor)),
+          content: Text(
+              "Are you sure you want to mark the emergency as completed?",
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: blackColor)),
           actions: [
             TextButton(
-              child: Text("Cancel"),
+              child: Text(
+                "Cancel",
+                style: TextStyle(
+                    color: primaryColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16),
+              ),
               onPressed: () {
                 Navigator.of(context).pop();
               },
             ),
             TextButton(
-              child: Text("Confirm"),
+              child: Text(
+                "Confirm",
+                style: TextStyle(
+                    color: primaryColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16),
+              ),
               onPressed: () {
                 Navigator.of(context).pop();
                 _upDateBookingStatus(bookingId2);
@@ -715,7 +786,8 @@ class _OrderState extends State<Order> {
   }
 
   // Hàm để hiển thị thông báo
-  void _showOrderNotification(String message) { // Đổi tên hàm
+  void _showOrderNotification(String message) {
+    // Đổi tên hàm
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -735,4 +807,3 @@ class _OrderState extends State<Order> {
     );
   }
 }
-
