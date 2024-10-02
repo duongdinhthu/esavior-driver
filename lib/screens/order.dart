@@ -239,7 +239,7 @@ class _OrderState extends State<Order> {
 
         // Kiểm tra nếu `bookingStatus` là 'Completed'
         if (bookingData['bookingStatus'] == 'Completed') {
-
+          _resetScreen();
           // Thông báo cho người dùng về việc hoàn thành đặt chỗ
         }
       } else {
