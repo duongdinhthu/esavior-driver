@@ -86,6 +86,8 @@ class _OrderState extends State<Order> {
     final double? driverLng = prefs.getDouble('driverLng');
     final double? customerLat = prefs.getDouble('customerLat');
     final double? customerLng = prefs.getDouble('customerLng');
+    final double? endLat = prefs.getDouble('endLat');
+    final double? endLng = prefs.getDouble('endLng');
     final String? savedCustomerName = prefs.getString('customerName');
     final String? savedPhoneNumber = prefs.getString('phoneNumber');
     final int? savedBookingId = prefs.getInt('bookingId');
@@ -97,9 +99,14 @@ class _OrderState extends State<Order> {
       if (customerLat != null && customerLng != null) {
         customerLocation = LatLng(customerLat, customerLng);
       }
-      customerName = savedCustomerName;
-      phoneNumber = savedPhoneNumber;
-      bookingId2 = savedBookingId;
+      if(endLat != null && endLng != null){
+        _endLocation  = LatLng(endLat, endLng);
+      }
+      if(savedCustomerName!=null && savedPhoneNumber!=null && savedBookingId!=null){
+        customerName = savedCustomerName;
+        phoneNumber = savedPhoneNumber;
+        bookingId2 = savedBookingId;
+      }
     });
   }
 
@@ -120,6 +127,10 @@ class _OrderState extends State<Order> {
     if (customerLocation != null) {
       prefs.setDouble('customerLat', customerLocation!.latitude);
       prefs.setDouble('customerLng', customerLocation!.longitude);
+    }
+    if(_endLocation != null){
+      prefs.setDouble('endLat', _endLocation!.latitude);
+      prefs.setDouble('endLng', _endLocation!.longitude);
     }
     prefs.setString('customerName', customerName ?? '');
     prefs.setString('phoneNumber', phoneNumber ?? '');
