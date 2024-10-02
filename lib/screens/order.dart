@@ -10,6 +10,7 @@ import 'package:project_flutter/main.dart';
 import 'dart:convert'; // Import for JSON handling
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:web_socket_channel/io.dart';
 
 class Order extends StatefulWidget {
   final bool isLoggedIn;
@@ -45,6 +46,11 @@ class _OrderState extends State<Order> {
       false; // Biến để theo dõi xem tài xế đã xác nhận đơn hàng chưa
   Timer? _locationTimer;
   Timer? _timer;
+  IOWebSocketChannel? _channel; // Biến toàn cục để lưu WebSocket channel
+  List<String> messages = []; // Danh sách lưu trữ ti
+  bool openSocket = false;
+
+
 
   @override
   void initState() {
@@ -121,6 +127,8 @@ class _OrderState extends State<Order> {
     _positionStream?.cancel();
     _locationTimer?.cancel();
     _saveDriverState(); // Lưu trạng thái trước khi thoát
+    _channel?.sink.close(); // Đảm bảo đóng WebSocket khi không sử dụng
+
     super.dispose();
   }
 
@@ -159,7 +167,41 @@ class _OrderState extends State<Order> {
       }
     });
   }
+  void _openWebSocketConnection(int? bookingId) {
+    if (_channel == null) { // Kiểm tra nếu WebSocket chưa được mở
+      _channel = IOWebSocketChannel.connect(
+          'wss://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/ws/common?id=$bookingId&role=driver'); // Kết nối với bookingId và role
 
+      // Nghe dữ liệu từ WebSocket
+      _channel!.stream.listen((message) {
+        print("Received from WebSocket: $message");
+
+        setState(() {
+          messages.add(message);  // Cập nhật danh sách tin nhắn trong giao diện
+        });
+      }, onDone: () {
+        print("WebSocket closed");
+      }, onError: (error) {
+        print("WebSocket error: $error");
+      });
+      openSocket = true; // Đặt trạng thái socket đã mở
+    }
+  }
+
+  void sendMessage(int? bookingId, String message) {
+    if (_channel != null && message.isNotEmpty) {
+      Map<String, dynamic> data = {
+        'type': 'send_message',
+        'id': bookingId,
+        'role': 'driver', // Role là customer hoặc driver tùy theo
+        'message': message
+      };
+      _channel!.sink.add(jsonEncode(data)); // Gửi dữ liệu JSON qua WebSocket
+      print("Sent message: $message" + bookingId.toString());
+    } else {
+      print("WebSocket channel is not connected or message is empty.");
+    }
+  }
   Future<void> _upDateBookingStatus(int? bookingId1) async {
     print('thuc hien goi aPi chuyen trang thai booking sang complete');
     print(bookingId1.toString());
@@ -342,6 +384,11 @@ class _OrderState extends State<Order> {
         });
         _checkBookingStatus(bookingId2);
         print(data.toString());
+        if(bookingId2 != null){
+          if(openSocket == false){
+            _openWebSocketConnection(bookingId2);
+          }
+        }
         print('booking id chưa hoàn thành :' + bookingId.toString());
         if (notification == true && hasAcknowledgedOrder == true) {
           _showNotification(
@@ -382,7 +429,14 @@ class _OrderState extends State<Order> {
         double destinationLongitude =
             data['destinationLongitude']; // Vị trí đến (destination)
 
+        int? bookingId3 = data['bookingId'];
+
         // Update customer pickup and destination locations
+        if(bookingId3 != null){
+          if(openSocket == false){
+            _openWebSocketConnection(bookingId3 );
+          }
+        }
         setState(() {
           customerLocation =
               LatLng(pickupLatitude, pickupLongitude); // Cập nhật vị trí đón
@@ -694,6 +748,81 @@ class _OrderState extends State<Order> {
                         );
                         await launch(launchUri.toString());
                       },
+                    ),
+                  ),
+                ),
+              ),
+              // Đoạn thêm vào dưới ListTile chứa thông tin customer
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: ElevatedButton(
+                  onPressed: () {
+                    // Hiển thị popup nhập tin nhắn
+                    showDialog(
+                      context: context,
+                      builder: (BuildContext context) {
+                        TextEditingController messageController = TextEditingController();
+                        return AlertDialog(
+                          title: const Text('Nhắn tin cho khách hàng'),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Hiển thị danh sách tin nhắn đã nhận
+                              Container(
+                                height: 200, // Chiều cao của danh sách tin nhắn
+                                child: ListView.builder(
+                                  itemCount: messages.length,
+                                  itemBuilder: (context, index) {
+                                    return ListTile(
+                                      title: Text(messages[index]),
+                                    );
+                                  },
+                                ),
+                              ),
+                              TextField(
+                                controller: messageController,
+                                decoration: const InputDecoration(
+                                  hintText: 'Nhập tin nhắn...',
+                                ),
+                              ),
+                            ],
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                              },
+                              child: const Text('Hủy'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                // Gửi tin nhắn qua WebSocket
+                                final message = messageController.text;
+                                if (message.isNotEmpty) {
+                                  sendMessage(bookingId2, message);  // Gửi tin nhắn qua WebSocket
+                                  messageController.clear();  // Xóa nội dung đã nhập sau khi gửi
+                                }
+                              },
+                              child: const Text('Gửi'),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8.0), // Bo góc
+                    ),
+                    minimumSize: Size(double.infinity, 50),
+                  ),
+                  child: Text(
+                    'Nhắn tin cho khách hàng',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
