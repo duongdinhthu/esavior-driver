@@ -12,6 +12,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/io.dart';
 
+import 'chat_message.dart';
+
 class Order extends StatefulWidget {
   final bool isLoggedIn;
   final Function onLogout;
@@ -47,7 +49,7 @@ class _OrderState extends State<Order> {
   Timer? _locationTimer;
   Timer? _timer;
   IOWebSocketChannel? _channel; // Biến toàn cục để lưu WebSocket channel
-  List<String> messages = []; // Danh sách lưu trữ ti
+  List<ChatMessage> messages = [];  // Danh sách lưu trữ các đối tượng ChatMessage
   bool openSocket = false;
 
 
@@ -118,6 +120,8 @@ class _OrderState extends State<Order> {
         customerName = savedCustomerName;
         phoneNumber = savedPhoneNumber;
         bookingId2 = savedBookingId;
+        print("ten khach hang lay lai: " + customerName.toString());
+        print("sdt khach hang lay lai: " + phoneNumber.toString());
       }
     });
   }
@@ -149,6 +153,8 @@ class _OrderState extends State<Order> {
     prefs.setString('customerName', customerName ?? '');
     prefs.setString('phoneNumber', phoneNumber ?? '');
     prefs.setInt('bookingId', bookingId2 ?? 0);
+    print("ten khach hang: " + customerName.toString());
+    print("sdt khach hang: " + phoneNumber.toString());
   }
 
   // In ra thông báo hoàn thành đơn hàng
@@ -170,14 +176,14 @@ class _OrderState extends State<Order> {
   void _openWebSocketConnection(int? bookingId) {
     if (_channel == null) { // Kiểm tra nếu WebSocket chưa được mở
       _channel = IOWebSocketChannel.connect(
-          'wss://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/ws/common?id=$bookingId&role=driver'); // Kết nối với bookingId và role
+          'wss://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/ws/common?id=$bookingId&role=driver'); // Kết nối với bookingId và role mặc định là driver
 
       // Nghe dữ liệu từ WebSocket
       _channel!.stream.listen((message) {
         print("Received from WebSocket: $message");
 
         setState(() {
-          messages.add(message);  // Cập nhật danh sách tin nhắn trong giao diện
+          messages.add(ChatMessage(message: message));  // Cập nhật danh sách tin nhắn
         });
       }, onDone: () {
         print("WebSocket closed");
@@ -188,20 +194,29 @@ class _OrderState extends State<Order> {
     }
   }
 
+
+
   void sendMessage(int? bookingId, String message) {
     if (_channel != null && message.isNotEmpty) {
       Map<String, dynamic> data = {
         'type': 'send_message',
         'id': bookingId,
-        'role': 'driver', // Role là customer hoặc driver tùy theo
+        'role': 'driver',  // Role mặc định là driver
         'message': message
       };
-      _channel!.sink.add(jsonEncode(data)); // Gửi dữ liệu JSON qua WebSocket
-      print("Sent message: $message" + bookingId.toString());
+
+      _channel!.sink.add(jsonEncode(data));  // Gửi dữ liệu JSON qua WebSocket
+      print("Sent message: $message with bookingId: ${bookingId.toString()}");
+
+      // Thêm tin nhắn vào danh sách messages
+      setState(() {
+        messages.add(ChatMessage(message: message));  // Lưu tin nhắn
+      });
     } else {
       print("WebSocket channel is not connected or message is empty.");
     }
   }
+
   Future<void> _upDateBookingStatus(int? bookingId1) async {
     print('thuc hien goi aPi chuyen trang thai booking sang complete');
     print(bookingId1.toString());
@@ -226,8 +241,9 @@ class _OrderState extends State<Order> {
         showTemporaryMessage(context, "Emergency booking complete!");
         String status1 = "Active";
         await _updateDriverStatus(widget.driverId, status1);
-        _resetScreen();
         _clearBookingStatus();
+        _resetScreen();
+
       } else {
         showTemporaryMessage(context, "Error during submit, Please try again.");
         print('Error: ${response.statusCode}, ${response.body}');
@@ -269,13 +285,15 @@ class _OrderState extends State<Order> {
         customerName = null;
         phoneNumber = null;
         hasAcknowledgedOrder = false;
+        hasNewOrderNotification = false; // Variable to check if notification has been shown
+        notification = false;
+        hasAcknowledgedOrder = false; // Biến để theo dõi xem tài xế đã xác nhận đơn hàng chưa
+        messages = []; // Danh sách lưu trữ ti
+        openSocket = false;
         print(
             'Driver ID after clearing: ${widget.driverId}'); // Thêm log kiểm tra
       });
-
-      // Thông báo cho người dùng
-      showTemporaryMessage(context, "Booking cleared successfully!");
-    } catch (error) {
+      } catch (error) {
       print("Error clearing booking status: $error");
       showTemporaryMessage(
           context, "Error clearing booking, please try again.");
@@ -287,7 +305,7 @@ class _OrderState extends State<Order> {
       // Gọi API để kiểm tra trạng thái booking
       final response = await http.get(Uri.parse(
           'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/$bookingId2'));
-      print('check status booking with booking ' + bookingId2.toString());
+      print('check booking status ' + response.statusCode.toString() + '  id booking: ' + bookingId2.toString());
 
       if (response.statusCode == 200) {
         // Parse JSON
@@ -296,6 +314,7 @@ class _OrderState extends State<Order> {
         // Kiểm tra nếu `bookingStatus` là 'Completed'
         if (bookingData['bookingStatus'] == 'Completed') {
           _resetScreen();
+          _clearBookingStatus();
           // Thông báo cho người dùng về việc hoàn thành đặt chỗ
         }
       } else {
@@ -363,14 +382,14 @@ class _OrderState extends State<Order> {
         Uri.parse(
             'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/bookings/unfinished/$driverId'),
       );
-
+      print("check response unfinish booking : " + response.statusCode.toString());
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         final data = json.decode(response.body);
 
         // Thay đổi bookingId thành kiểu int
         int bookingId = data['bookingId']; // Sửa thành int
-        String customerName = data['patientName'];
-        String phoneNumber = data['patientPhone'];
+        String customerName1 = data['patientName'];
+        String phoneNumber1 = data['patientPhone'];
         double pickupLatitude = data['latitude'];
         double pickupLongitude = data['longitude'];
         double destinationLatitude = data['destinationLatitude'];
@@ -379,8 +398,10 @@ class _OrderState extends State<Order> {
         setState(() {
           customerLocation = LatLng(pickupLatitude, pickupLongitude);
           _endLocation = LatLng(destinationLatitude, destinationLongitude);
-          this.customerName = customerName;
-          this.phoneNumber = phoneNumber;
+          customerName = customerName1;
+          phoneNumber = phoneNumber1;
+          print("ten khach hang chua hoan thanh: " + customerName.toString());
+          print("sdt khach hang chua hoan than: " + phoneNumber.toString());
         });
         _checkBookingStatus(bookingId2);
         print(data.toString());
@@ -413,7 +434,7 @@ class _OrderState extends State<Order> {
         Uri.parse(
             'https://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/api/drivers/check-driver/$driverId'),
       );
-
+      print('check driver booking : ' + response.statusCode.toString());
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         final data = json.decode(response.body);
 
@@ -430,7 +451,7 @@ class _OrderState extends State<Order> {
             data['destinationLongitude']; // Vị trí đến (destination)
 
         int? bookingId3 = data['bookingId'];
-
+        _checkBookingStatus(bookingId3);
         // Update customer pickup and destination locations
         if(bookingId3 != null){
           if(openSocket == false){
@@ -443,22 +464,23 @@ class _OrderState extends State<Order> {
           customerName = newCustomerName;
           phoneNumber = newPhoneNumber;
           _endLocation = LatLng(
-              destinationLatitude, destinationLongitude); // Cập nhật vị trí đến
+              destinationLatitude, destinationLongitude);
+          print("ten khach hang ham check: " + customerName.toString());
+          print("sdt khach hang ham check: " + phoneNumber.toString());// Cập nhật vị trí đến
         });
 
         // Show notification only if it hasn't been acknowledged
-        if (!hasAcknowledgedOrder) {
+        if (!hasAcknowledgedOrder && hasNewOrderNotification == false) {
           _showNotification(
               'Customer: $customerName, Phone: $phoneNumber\nPickup: ($pickupLatitude, $pickupLongitude)\nDestination: ($destinationLatitude, $destinationLongitude)');
-          hasNewOrderNotification =
-              true; // Mark that the notification has been displayed
+          // Mark that the notification has been displayed
         }
 
         // Update both pickup and destination locations on the map
         _getPolyline(); // Cập nhật tuyến đường giữa vị trí tài xế, điểm đón và điểm đến
-      } else {
-        if (hasAcknowledgedOrder == true)
-          print("No new ride request information.");
+      } else if(response.statusCode == 204) {
+        print("No new ride request information.");
+        _clearBookingStatus();
       }
     }
   }
@@ -773,8 +795,9 @@ class _OrderState extends State<Order> {
                                 child: ListView.builder(
                                   itemCount: messages.length,
                                   itemBuilder: (context, index) {
+                                    ChatMessage chatMessage = messages[index];  // Lấy đối tượng ChatMessage từ danh sách
                                     return ListTile(
-                                      title: Text(messages[index]),
+                                      title: Text(chatMessage.message),  // Hiển thị nội dung tin nhắn
                                     );
                                   },
                                 ),
@@ -801,6 +824,11 @@ class _OrderState extends State<Order> {
                                 if (message.isNotEmpty) {
                                   sendMessage(bookingId2, message);  // Gửi tin nhắn qua WebSocket
                                   messageController.clear();  // Xóa nội dung đã nhập sau khi gửi
+
+                                  // Lưu tin nhắn vào danh sách
+                                  setState(() {
+                                    messages.add(ChatMessage(message: message));  // Lưu tin nhắn vào danh sách
+                                  });
                                 }
                               },
                               child: const Text('Gửi'),
