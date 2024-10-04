@@ -173,27 +173,50 @@ class _OrderState extends State<Order> {
       }
     });
   }
-  void _openWebSocketConnection(int? bookingId) {
-    if (_channel == null) { // Kiểm tra nếu WebSocket chưa được mở
+  void _openWebSocketConnection(int? bookingId, {Function? setStateDialog}) {
+    if (_channel == null) {
       _channel = IOWebSocketChannel.connect(
-          'wss://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/ws/common?id=$bookingId&role=driver'); // Kết nối với bookingId và role mặc định là driver
+          'wss://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/ws/common?id=$bookingId&role=driver');
 
-      // Nghe dữ liệu từ WebSocket
+      // Lắng nghe dữ liệu từ WebSocket
       _channel!.stream.listen((message) {
         print("Received from WebSocket: $message");
 
-        setState(() {
-          messages.add(ChatMessage(message: message));  // Cập nhật danh sách tin nhắn
-        });
+        // Lấy giá trị 'message'
+        RegExp regex = RegExp(r'message=([^,}]+)');
+        Match? match = regex.firstMatch(message);
+        if (match != null) {
+          String mess = match.group(1) ?? '';
+          print('mess la : ' + mess + "======");
+          print("trang thai duoc truyen " + setStateDialog.toString());
+          // Cập nhật danh sách tin nhắn
+          if (message.isNotEmpty) {
+            if (setStateDialog != null) {
+              setStateDialog(() {
+                messages.add(ChatMessage(message: mess));
+                print("cap nhat tin nhan thanh cong");
+              });
+            } else {
+              // Cập nhật bình thường nếu không có dialog
+              setState(() {
+                messages.add(ChatMessage(message: mess));
+                print('cap nhat binh thuong neu khong co dialog');
+                print("Updated messages: $messages");
+                print("Updated messages: ${messages.map((msg) => msg.message).toList()}");
+
+              });
+            }
+          }
+        }
       }, onDone: () {
         print("WebSocket closed");
       }, onError: (error) {
         print("WebSocket error: $error");
       });
-      openSocket = true; // Đặt trạng thái socket đã mở
+
+      openSocket = true; // Đặt trạng thái đã mở WebSocket
     }
   }
-
 
 
   void sendMessage(int? bookingId, String message) {
@@ -204,18 +227,15 @@ class _OrderState extends State<Order> {
         'role': 'driver',  // Role mặc định là driver
         'message': message
       };
-
       _channel!.sink.add(jsonEncode(data));  // Gửi dữ liệu JSON qua WebSocket
       print("Sent message: $message with bookingId: ${bookingId.toString()}");
 
-      // Thêm tin nhắn vào danh sách messages
-      setState(() {
-        messages.add(ChatMessage(message: message));  // Lưu tin nhắn
-      });
+      // Không thêm tin nhắn vào danh sách ngay tại đây
     } else {
       print("WebSocket channel is not connected or message is empty.");
     }
   }
+
 
   Future<void> _upDateBookingStatus(int? bookingId1) async {
     print('thuc hien goi aPi chuyen trang thai booking sang complete');
@@ -411,7 +431,7 @@ class _OrderState extends State<Order> {
           }
         }
         print('booking id chưa hoàn thành :' + bookingId.toString());
-        if (notification == true && hasAcknowledgedOrder == true) {
+        if (!hasAcknowledgedOrder && hasNewOrderNotification == false) {
           _showNotification(
               'Đơn hàng chưa hoàn thành: Khách hàng $customerName, Điểm đón: ($pickupLatitude, $pickupLongitude), Điểm đến: ($destinationLatitude, $destinationLongitude)');
         }
@@ -455,7 +475,7 @@ class _OrderState extends State<Order> {
         // Update customer pickup and destination locations
         if(bookingId3 != null){
           if(openSocket == false){
-            _openWebSocketConnection(bookingId3 );
+            _openWebSocketConnection(bookingId3);
           }
         }
         setState(() {
@@ -784,56 +804,60 @@ class _OrderState extends State<Order> {
                       context: context,
                       builder: (BuildContext context) {
                         TextEditingController messageController = TextEditingController();
-                        return AlertDialog(
-                          title: const Text('Nhắn tin cho khách hàng'),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Hiển thị danh sách tin nhắn đã nhận
-                              Container(
-                                height: 200, // Chiều cao của danh sách tin nhắn
-                                child: ListView.builder(
-                                  itemCount: messages.length,
-                                  itemBuilder: (context, index) {
-                                    ChatMessage chatMessage = messages[index];  // Lấy đối tượng ChatMessage từ danh sách
-                                    return ListTile(
-                                      title: Text(chatMessage.message),  // Hiển thị nội dung tin nhắn
-                                    );
+                        return StatefulBuilder(
+                          builder: (context, setStateDialog) {
+                            // Truyền setStateDialog vào _openWebSocketConnection
+                            _openWebSocketConnection(bookingId2, setStateDialog: setStateDialog); // Truyền setStateDialog vào đây
+                            return AlertDialog(
+                              title: const Text('Nhắn tin cho khách hàng'),
+                              content: Container(
+                                width: double.maxFinite,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Expanded(
+                                      child: ListView.builder(
+                                        itemCount: messages.length,
+                                        itemBuilder: (context, index) {
+                                          ChatMessage chatMessage = messages[index];
+                                          return ListTile(
+                                            title: Text(chatMessage.message),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                    TextField(
+                                      controller: messageController,
+                                      decoration: const InputDecoration(
+                                        hintText: 'Nhập tin nhắn...',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
                                   },
+                                  child: const Text('Hủy'),
                                 ),
-                              ),
-                              TextField(
-                                controller: messageController,
-                                decoration: const InputDecoration(
-                                  hintText: 'Nhập tin nhắn...',
+                                TextButton(
+                                  onPressed: () {
+                                    final message = messageController.text;
+                                    if (message.isNotEmpty) {
+                                      sendMessage(bookingId2, message);
+                                      messageController.clear();
+                                      setStateDialog(() {
+                                        messages.add(ChatMessage(message: message));
+                                      });
+                                    }
+                                  },
+                                  child: const Text('Gửi'),
                                 ),
-                              ),
-                            ],
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                              },
-                              child: const Text('Hủy'),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                // Gửi tin nhắn qua WebSocket
-                                final message = messageController.text;
-                                if (message.isNotEmpty) {
-                                  sendMessage(bookingId2, message);  // Gửi tin nhắn qua WebSocket
-                                  messageController.clear();  // Xóa nội dung đã nhập sau khi gửi
-
-                                  // Lưu tin nhắn vào danh sách
-                                  setState(() {
-                                    messages.add(ChatMessage(message: message));  // Lưu tin nhắn vào danh sách
-                                  });
-                                }
-                              },
-                              child: const Text('Gửi'),
-                            ),
-                          ],
+                              ],
+                            );
+                          },
                         );
                       },
                     );
