@@ -51,6 +51,7 @@ class _OrderState extends State<Order> {
   IOWebSocketChannel? _channel; // Biến toàn cục để lưu WebSocket channel
   List<ChatMessage> messages = [];  // Danh sách lưu trữ các đối tượng ChatMessage
   bool openSocket = false;
+  Stream? broadcastStream; // Khai báo biến toàn cục để lưu broadcastStream
 
 
 
@@ -178,32 +179,34 @@ class _OrderState extends State<Order> {
       _channel = IOWebSocketChannel.connect(
           'wss://techwiz-b3fsfvavawb9fpg8.japanwest-01.azurewebsites.net/ws/common?id=$bookingId&role=driver');
 
-      // Lắng nghe dữ liệu từ WebSocket
-      _channel!.stream.listen((message) {
-        print("Received from WebSocket: $message");
+      // Chuyển đổi thành BroadcastStream và đảm bảo không bị null
+      broadcastStream = _channel!.stream.asBroadcastStream();
+      print("_channel connected");
 
-        // Lấy giá trị 'message'
-        RegExp regex = RegExp(r'message=([^,}]+)');
-        Match? match = regex.firstMatch(message);
-        if (match != null) {
-          String mess = match.group(1) ?? '';
-          print('mess la : ' + mess + "======");
-          print("trang thai duoc truyen " + setStateDialog.toString());
-          // Cập nhật danh sách tin nhắn
-          if (message.isNotEmpty) {
+      // Lắng nghe dữ liệu từ WebSocket
+      broadcastStream!.listen((message) {  // Không cần dấu hỏi vì đã chắc chắn không null
+        if (message.isNotEmpty) {
+          print("Received from WebSocket: $message");
+
+          // Lấy giá trị 'message'
+          RegExp regex = RegExp(r'message=([^,}]+)');
+          Match? match = regex.firstMatch(message);
+          if (match != null) {
+            String mess = match.group(1) ?? '';
+            print('Received message: $mess');
+
+            // Cập nhật danh sách tin nhắn
             if (setStateDialog != null) {
               setStateDialog(() {
                 messages.add(ChatMessage(message: mess));
-                print("cap nhat tin nhan thanh cong");
+                print("Updated message in dialog");
+                print(mess);
               });
             } else {
-              // Cập nhật bình thường nếu không có dialog
               setState(() {
                 messages.add(ChatMessage(message: mess));
-                print('cap nhat binh thuong neu khong co dialog');
-                print("Updated messages: $messages");
-                print("Updated messages: ${messages.map((msg) => msg.message).toList()}");
-
+                print('Updated message without dialog');
+                print(mess);
               });
             }
           }
@@ -211,12 +214,17 @@ class _OrderState extends State<Order> {
       }, onDone: () {
         print("WebSocket closed");
       }, onError: (error) {
+        // Log lỗi chi tiết
         print("WebSocket error: $error");
       });
 
       openSocket = true; // Đặt trạng thái đã mở WebSocket
     }
   }
+
+
+
+
 
 
   void sendMessage(int? bookingId, String message) {
@@ -816,16 +824,45 @@ class _OrderState extends State<Order> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Expanded(
-                                      child: ListView.builder(
-                                        itemCount: messages.length,
-                                        itemBuilder: (context, index) {
-                                          ChatMessage chatMessage = messages[index];
-                                          return ListTile(
-                                            title: Text(chatMessage.message),
-                                          );
+                                      child: StreamBuilder(
+                                        stream: broadcastStream,
+                                        builder: (context, snapshot) {
+                                          if (snapshot.hasData) {
+                                            // Giải mã dữ liệu nhận được từ WebSocket (snapshot.data là chuỗi JSON)
+                                            try {
+                                              Map<String, dynamic> messageData = jsonDecode(snapshot.data.toString());
+                                              String mess = messageData['message'] ?? ''; // Chỉ lấy phần 'message'
+
+                                              // Thêm tin nhắn vào danh sách
+                                              messages.add(ChatMessage(message: mess));
+
+                                            } catch (e) {
+                                              print('Error decoding message: $e');
+                                            }
+
+                                            // Hiển thị danh sách tin nhắn
+                                            return ListView.builder(
+                                              itemCount: messages.length,
+                                              itemBuilder: (context, index) {
+                                                ChatMessage chatMessage = messages[index];
+                                                return ListTile(
+                                                  title: Text(chatMessage.message),
+                                                );
+                                              },
+                                            );
+                                          } else {
+                                            return const Center(
+                                              child: Text(
+                                                'Chưa có tin nhắn', // Hoặc một thông báo khác
+                                                style: TextStyle(fontSize: 16, color: Colors.grey),
+                                              ),
+                                            );
+                                          }
                                         },
                                       ),
                                     ),
+
+
                                     TextField(
                                       controller: messageController,
                                       decoration: const InputDecoration(
