@@ -213,9 +213,11 @@ class _OrderState extends State<Order> {
         }
       }, onDone: () {
         print("WebSocket closed");
+        _openWebSocketConnection(bookingId2);
       }, onError: (error) {
         // Log lỗi chi tiết
         print("WebSocket error: $error");
+        _openWebSocketConnection(bookingId2);
       });
 
       openSocket = true; // Đặt trạng thái đã mở WebSocket
@@ -478,12 +480,12 @@ class _OrderState extends State<Order> {
         double destinationLongitude =
             data['destinationLongitude']; // Vị trí đến (destination)
 
-        int? bookingId3 = data['bookingId'];
-        _checkBookingStatus(bookingId3);
+        bookingId2 = data['bookingId'];
+        _checkBookingStatus(bookingId2);
         // Update customer pickup and destination locations
-        if(bookingId3 != null){
+        if(bookingId2 != null){
           if(openSocket == false){
-            _openWebSocketConnection(bookingId3);
+            _openWebSocketConnection(bookingId2);
           }
         }
         setState(() {
@@ -805,117 +807,142 @@ class _OrderState extends State<Order> {
               // Đoạn thêm vào dưới ListTile chứa thông tin customer
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Hiển thị popup nhập tin nhắn
-                    showDialog(
-                      context: context,
-                      builder: (BuildContext context) {
-                        TextEditingController messageController = TextEditingController();
-                        return StatefulBuilder(
-                          builder: (context, setStateDialog) {
-                            // Truyền setStateDialog vào _openWebSocketConnection
-                            _openWebSocketConnection(bookingId2, setStateDialog: setStateDialog); // Truyền setStateDialog vào đây
-                            return AlertDialog(
-                              title: const Text('Nhắn tin cho khách hàng'),
-                              content: Container(
-                                width: double.maxFinite,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Expanded(
-                                      child: StreamBuilder(
-                                        stream: broadcastStream,
-                                        builder: (context, snapshot) {
-                                          if (snapshot.hasData) {
-                                            // Giải mã dữ liệu nhận được từ WebSocket (snapshot.data là chuỗi JSON)
-                                            try {
-                                              Map<String, dynamic> messageData = jsonDecode(snapshot.data.toString());
-                                              String mess = messageData['message'] ?? ''; // Chỉ lấy phần 'message'
+                child: Column(
+                  children: [
+                    // Nút "Nhắn tin cho khách hàng"
+                    ElevatedButton(
+                      onPressed: () {
+                        // Hiển thị popup nhập tin nhắn
+                        showDialog(
+                          context: context,
+                          builder: (BuildContext context) {
+                            TextEditingController messageController = TextEditingController();
+                            return StatefulBuilder(
+                              builder: (context, setStateDialog) {
+                                // Truyền setStateDialog vào _openWebSocketConnection
+                                _openWebSocketConnection(bookingId2, setStateDialog: setStateDialog);
+                                return AlertDialog(
+                                  title: const Text('Nhắn tin cho khách hàng'),
+                                  content: SizedBox(
+                                    width: double.maxFinite,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Expanded(
+                                          child: StreamBuilder(
+                                            stream: broadcastStream,
+                                            builder: (context, snapshot) {
+                                              if (snapshot.hasData) {
+                                                try {
+                                                  Map<String, dynamic> messageData = jsonDecode(snapshot.data.toString());
+                                                  String mess = messageData['message'] ?? ''; // Chỉ lấy phần 'message'
+                                                  messages.add(ChatMessage(message: mess));
+                                                } catch (e) {
+                                                  print('Error decoding message: $e');
+                                                }
 
-                                              // Thêm tin nhắn vào danh sách
-                                              messages.add(ChatMessage(message: mess));
-
-                                            } catch (e) {
-                                              print('Error decoding message: $e');
-                                            }
-
-                                            // Hiển thị danh sách tin nhắn
-                                            return ListView.builder(
-                                              itemCount: messages.length,
-                                              itemBuilder: (context, index) {
-                                                ChatMessage chatMessage = messages[index];
-                                                return ListTile(
-                                                  title: Text(chatMessage.message),
+                                                // Hiển thị danh sách tin nhắn
+                                                return ListView.builder(
+                                                  itemCount: messages.length,
+                                                  itemBuilder: (context, index) {
+                                                    ChatMessage chatMessage = messages[index];
+                                                    return ListTile(
+                                                      title: Text(chatMessage.message),
+                                                    );
+                                                  },
                                                 );
-                                              },
-                                            );
-                                          } else {
-                                            return const Center(
-                                              child: Text(
-                                                'Chưa có tin nhắn', // Hoặc một thông báo khác
-                                                style: TextStyle(fontSize: 16, color: Colors.grey),
-                                              ),
-                                            );
-                                          }
-                                        },
-                                      ),
+                                              } else {
+                                                return const Center(
+                                                  child: Text(
+                                                    'Chưa có tin nhắn',
+                                                    style: TextStyle(fontSize: 16, color: Colors.grey),
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                          ),
+                                        ),
+                                        TextField(
+                                          controller: messageController,
+                                          decoration: const InputDecoration(
+                                            hintText: 'Nhập tin nhắn...',
+                                          ),
+                                        ),
+                                      ],
                                     ),
-
-
-                                    TextField(
-                                      controller: messageController,
-                                      decoration: const InputDecoration(
-                                        hintText: 'Nhập tin nhắn...',
-                                      ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.of(context).pop();
+                                      },
+                                      child: const Text('Hủy'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        final message = messageController.text;
+                                        if (message.isNotEmpty) {
+                                          sendMessage(bookingId2, message);
+                                          messageController.clear();
+                                          setStateDialog(() {
+                                            messages.add(ChatMessage(message: message));
+                                          });
+                                        }
+                                      },
+                                      child: const Text('Gửi'),
                                     ),
                                   ],
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () {
-                                    Navigator.of(context).pop();
-                                  },
-                                  child: const Text('Hủy'),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    final message = messageController.text;
-                                    if (message.isNotEmpty) {
-                                      sendMessage(bookingId2, message);
-                                      messageController.clear();
-                                      setStateDialog(() {
-                                        messages.add(ChatMessage(message: message));
-                                      });
-                                    }
-                                  },
-                                  child: const Text('Gửi'),
-                                ),
-                              ],
+                                );
+                              },
                             );
                           },
                         );
                       },
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8.0), // Bo góc
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.0), // Bo góc
+                        ),
+                        minimumSize: const Size(double.infinity, 50), // Kích thước nút
+                      ),
+                      child: const Text(
+                        'Nhắn tin cho khách hàng',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                    minimumSize: Size(double.infinity, 50),
-                  ),
-                  child: Text(
-                    'Nhắn tin cho khách hàng',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+
+                    const SizedBox(height: 10.0), // Khoảng cách giữa các nút
+
+                    // Nút "Completed"
+                    ElevatedButton(
+                      onPressed: _confirmOrder, // Gọi hàm xác nhận
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16.0),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8.0), // Bo góc
+                        ),
+                        minimumSize: const Size(double.infinity, 50), // Kích thước nút
+                        elevation: 12,
+                        shadowColor: Colors.black.withOpacity(0.7),
+                        backgroundColor: primaryColor, // Màu nền nút
+                      ),
+                      child: const Text(
+                        'Completed',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
+
               // Nút Confirm nằm ở đây
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
